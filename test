@@ -1,0 +1,189 @@
+-----------------------------------
+-- World Hopper Script (Auto-Reload)
+-----------------------------------
+
+-- 1) Load Rayfield
+local success, Rayfield = pcall(function()
+	return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+if not success then
+	warn("Failed to load Rayfield!")
+	return
+end
+
+-----------------------------------
+-- 2) Rayfield Setup
+-----------------------------------
+local Window = Rayfield:CreateWindow({
+	Name = "World Hopper",
+	Icon = 0,
+	LoadingTitle = "World Hopper loading",
+	LoadingSubtitle = "by YourName",
+	Theme = "Default",
+	DisableRayfieldPrompts = false,
+	DisableBuildWarnings = false,
+})
+
+local WorldTab = Window:CreateTab("World Hopper", 4483362458)
+
+-----------------------------------
+-- 3) Services
+-----------------------------------
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+
+-----------------------------------
+-- 4) World Mapping
+-- (We check for these children under workspace.Map)
+-----------------------------------
+local worldMapping = {
+	Overworld = "Overworld map",
+	Cave = "Cave",
+	Ocean = "Ocean",
+	Void = "Void",
+	Lava = "Lava"
+}
+
+-----------------------------------
+-- 5) Global Variables
+-----------------------------------
+local activeTarget = nil  -- "Overworld", "Cave", "Ocean", "Void", or "Lava"
+local hopActive = false   -- Whether the hop loop is active
+
+-----------------------------------
+-- 6) Get Current World
+-----------------------------------
+local function getCurrentWorld()
+	if not workspace:FindFirstChild("Map") then
+		return nil
+	end
+	for world, mapName in pairs(worldMapping) do
+		if workspace.Map:FindFirstChild(mapName) then
+			return world
+		end
+	end
+	return nil
+end
+
+-----------------------------------
+-- 7) Gather Available Servers
+-----------------------------------
+-- This function returns a table of server JobIds (strings).
+-----------------------------------
+local function getServers()
+	local placeId = game.PlaceId
+	local servers = {}
+	local cursor = ""
+	repeat
+		local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s"):format(
+			placeId,
+			(cursor ~= "" and "&cursor=" .. cursor or "")
+		)
+		local response = HttpService:JSONDecode(game:HttpGet(url))
+		for _, server in ipairs(response.data) do
+			-- 'server.id' is the JobId string
+			if type(server.id) == "string" and server.playing < server.maxPlayers then
+				table.insert(servers, server.id)
+			end
+		end
+		cursor = response.nextPageCursor or ""
+	until cursor == "" or not cursor
+	return servers
+end
+
+-----------------------------------
+-- 8) Hop to a Random Server
+-----------------------------------
+local function hopToServer()
+	local servers = getServers()
+	if #servers == 0 then
+		warn("No available servers found for hopping!")
+		return
+	end
+
+	-- Pick a random server from the list
+	local randomIndex = math.random(1, #servers)
+	local jobId = servers[randomIndex]
+
+	-- Safety check: Must be a non-empty string
+	if type(jobId) ~= "string" or jobId == "" then
+		warn("Server JobId is invalid!")
+		return
+	end
+
+	-- If your executor supports queue_on_teleport, queue this script to auto-load
+	if queue_on_teleport then
+		-- Replace with your actual raw script link
+		queue_on_teleport('loadstring(game:HttpGet("YOUR_RAW_SCRIPT_URL"))()')
+	end
+
+	-- Finally, teleport to the chosen server
+	TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, LocalPlayer)
+end
+
+-----------------------------------
+-- 9) Main Hop Loop
+-----------------------------------
+local function startHopLoop(targetWorld)
+	hopActive = true
+	task.spawn(function()
+		while hopActive and activeTarget == targetWorld do
+			local currentWorld = getCurrentWorld()
+			print("Current World:", currentWorld, "| Target:", targetWorld)
+			if currentWorld == targetWorld then
+				-- Found the target world; wait a bit before checking again
+				task.wait(10)
+			else
+				print("Hopping... (target " .. targetWorld .. " not found)")
+				hopToServer()
+				task.wait(7)
+			end
+		end
+	end)
+end
+
+local function stopHopLoop()
+	hopActive = false
+end
+
+-----------------------------------
+-- 10) Rayfield Toggles for Each World
+-----------------------------------
+local function createWorldToggle(worldName)
+	WorldTab:CreateToggle({
+		Name = worldName,
+		CurrentValue = false,
+		Flag = worldName .. "Toggle",
+		Callback = function(value)
+			if value then
+				-- Start the hop loop for this world
+				activeTarget = worldName
+				startHopLoop(worldName)
+			else
+				-- If this toggle was the active target, stop hopping
+				if activeTarget == worldName then
+					activeTarget = nil
+					stopHopLoop()
+				end
+			end
+		end,
+	})
+end
+
+-- Create a toggle for each world
+for world, _ in pairs(worldMapping) do
+	createWorldToggle(world)
+end
+
+-----------------------------------
+-- 11) Optional Stop Button
+-----------------------------------
+WorldTab:CreateButton({
+	Name = "Stop Hopping",
+	Callback = function()
+		activeTarget = nil
+		stopHopLoop()
+	end,
+})
