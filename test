@@ -116,7 +116,7 @@ local function hopToServer()
 	-- If your executor supports queue_on_teleport, queue this script to auto-load
 	if queue_on_teleport then
 		-- Replace with your actual raw script link
-		queue_on_teleport('loadstring(game:HttpGet("YOUR_RAW_SCRIPT_URL"))()')
+		queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/moma1133222/script1/refs/heads/main/test"))()')
 	end
 
 	-- Finally, teleport to the chosen server
